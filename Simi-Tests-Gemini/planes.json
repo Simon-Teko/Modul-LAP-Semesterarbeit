@@ -1,0 +1,12 @@
+{
+  "aircraft_types": [
+    {"type": "Cessna", "speed_range": [1.0, 2.0], "color": [200, 200, 200]},
+    {"type": "Boeing", "speed_range": [2.5, 3.5], "color": [50, 50, 255]},
+    {"type": "Airbus", "speed_range": [2.0, 3.0], "color": [255, 165, 0]}
+  ],
+  "airport": {
+    "pos": [400, 300],
+    "runway_vector": [-100, 0],
+    "landing_threshold": 10
+  }
+}

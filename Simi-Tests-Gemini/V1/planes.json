@@ -1,0 +1,14 @@
+{
+  "aircraft_types": [
+    {
+      "type": "Small Jet",
+      "speed": 2,
+      "color": [255, 0, 0]
+    },
+    {
+      "type": "Cargo Plane",
+      "speed": 1,
+      "color": [0, 255, 0]
+    }
+  ]
+}

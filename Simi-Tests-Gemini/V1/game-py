@@ -1,0 +1,118 @@
+import pygame
+import random
+import json
+import math
+
+# Initialisierung
+pygame.init()
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Fluglotsen Minispiel")
+
+# Farben & Einstellungen
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+AIRPORT_POS = (WIDTH // 2, HEIGHT // 2)
+
+# 1. JSON Daten laden
+def load_aircraft_data():
+    # Falls die Datei nicht existiert, nutzen wir Default-Werte
+    try:
+        with open('planes.json', 'r') as f:
+            return json.load(f)["aircraft_types"]
+    except FileNotFoundError:
+        return [{"type": "Default", "speed": 1.5, "color": [0, 0, 255]}]
+
+AIRCRAFT_CONFIGS = load_aircraft_data()
+
+class Plane:
+    def __init__(self, x, y, config=None):
+        if config is None:
+            config = random.choice(AIRCRAFT_CONFIGS)
+        
+        self.x = x
+        self.y = y
+        self.speed = config["speed"]
+        self.color = config["color"]
+        self.radius = 10
+        self.landed = False
+
+    def move_towards_airport(self):
+        # Vektor zum Flughafen berechnen
+        dx = AIRPORT_POS[0] - self.x
+        dy = AIRPORT_POS[1] - self.y
+        dist = math.hypot(dx, dy)
+        
+        if dist > 5:
+            self.x += (dx / dist) * self.speed
+            self.y += (dy / dist) * self.speed
+        else:
+            self.landed = True
+
+    def draw(self, surface):
+        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), self.radius)
+
+def main():
+    clock = pygame.time.Clock()
+    planes = []
+    score = 0
+    font = pygame.font.SysFont("Arial", 24)
+
+    # Start-Setup: Zufällige Flugzeuge generieren
+    for _ in range(5):
+        planes.append(Plane(random.randint(0, WIDTH), random.randint(0, HEIGHT)))
+
+    running = True
+    while running:
+        screen.fill(WHITE)
+        
+        # Flughafen zeichnen
+        pygame.draw.rect(screen, BLACK, (AIRPORT_POS[0]-20, AIRPORT_POS[1]-20, 40, 40), 2)
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            
+            # Story: Eigene Flugzeuge per Mausklick
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = pygame.mouse.get_pos()
+                planes.append(Plane(mx, my))
+
+        # Logik: Bewegen, Kollision und Score
+        remaining_planes = []
+        collided_indices = set()
+
+        # Kollisionsprüfung (Story: Kollision)
+        for i in range(len(planes)):
+            for j in range(i + 1, len(planes)):
+                dist = math.hypot(planes[i].x - planes[j].x, planes[i].y - planes[j].y)
+                if dist < (planes[i].radius + planes[j].radius):
+                    collided_indices.add(i)
+                    collided_indices.add(j)
+                    score -= 5  # Punktabzug bei Crash
+
+        for i, plane in enumerate(planes):
+            if i in collided_indices:
+                continue # Flugzeug verschwindet (Crash)
+            
+            plane.move_towards_airport()
+            
+            if plane.landed:
+                score += 10 # Punktgewinn bei Landung
+            else:
+                remaining_planes.append(plane)
+                plane.draw(screen)
+
+        planes = remaining_planes
+
+        # Scoreboard anzeigen
+        score_text = font.render(f"Score: {score}", True, BLACK)
+        screen.blit(score_text, (10, 10))
+        
+        pygame.display.flip()
+        clock.tick(60)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
