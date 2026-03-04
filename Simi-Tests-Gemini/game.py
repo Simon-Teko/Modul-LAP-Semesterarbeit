@@ -39,7 +39,7 @@ class Aircraft:
         self.x = x # Koordinate X
         self.y = y # Koordinate Y
         self.speed = random.uniform(1.5, 3.5) # Geschwindigkeit (Zufällig)
-        self.altitude = random.randrange(6000, 10001, 10) # Höhe in Fuss (Zufällig + durch 10 Teilbar)
+        self.altitude = random.randrange(6000, 10001, 20) # Höhe in Fuss (Zufällig + durch 20 Teilbar)
         self.target_wp_index = 0 # Kurs / Ziel --> Waypoint
         self.state = "cruising" # Status
         self.collision_avoidance = False # Kollisionserkennung
@@ -85,15 +85,15 @@ class Aircraft:
         # Höhenanpassung zum Wegpunkt (Sinkflug simulieren)
         goal_altitude = 4500 - (self.target_wp_index * 1500) # Simulierter Glide Slope
         if self.altitude > goal_altitude:
-            self.altitude -= 10
+            self.altitude -= 20
         elif self.altitude < goal_altitude:
-            self.altitude += 10
+            self.altitude += 20
 
         # Kurs berechnen und bewegen
         angle = math.atan2(ty - self.y, tx - self.x)
         
         # In Approach State? (Wenn auf "Final")
-        if WAYPOINT_ORDER[self.target_wp_index] == "Final" or WAYPOINT_ORDER[self.target_wp_index] == "Airport":
+        if WAYPOINT_ORDER[self.target_wp_index] == "Base"  or WAYPOINT_ORDER[self.target_wp_index] == "Final"  or WAYPOINT_ORDER[self.target_wp_index] == "Airport":
             move_speed = 2 # Feste Approach Speed simulieren (8 Pixel entspräche hier einem sehr großen Sprung)
         else:
             move_speed = self.speed
