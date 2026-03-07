@@ -19,6 +19,7 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 GRAY = (200, 200, 200)
+PURPLE = (128, 0, 128)
 
 # Wegpunkte für die Platzrunde (Traffic Circuit)
 WAYPOINTS = {
@@ -29,6 +30,10 @@ WAYPOINTS = {
 }
 # Wegpunkte Reihenfolge
 WAYPOINT_ORDER = ["Downwind", "Base", "Final", "Airport"]
+
+# NEU: Warteschleifen-Konfiguration
+HOLDING_WP = (150, 650) # Position der Warteschleife unten links
+MAX_CIRCUIT_PLANES = 4  # Ab wie vielen Flugzeugen im Anflug gestaut wird
 
 #=========================================================
 # Aircraft
@@ -41,8 +46,11 @@ class Aircraft:
         self.speed = random.uniform(1.5, 3.5) # Geschwindigkeit (Zufällig)
         self.altitude = random.randrange(6000, 10001, 20) # Höhe in Fuss (Zufällig + durch 20 Teilbar)
         self.target_wp_index = 0 # Kurs / Ziel --> Waypoint
-        self.state = "cruising" # Status
+        self.state = "new" # Status
         self.collision_avoidance = False # Kollisionserkennung
+        # NEU: Variablen für die Kreisbahn der Warteschleife
+        self.is_orbiting = False
+        self.orbit_angle = 0.0
 
     def get_target(self): # Waypoint
         if self.target_wp_index < len(WAYPOINT_ORDER): # überprüfen ob bereits alle Waypoints abgearbetet wurden
@@ -65,6 +73,28 @@ class Aircraft:
                         self.altitude += 50
                     else:
                         self.altitude -= 50
+        
+        if self.state == "holding":
+            hx, hy = HOLDING_WP
+            dist_to_hold = math.hypot(hx - self.x, hy - self.y)
+            
+            # 1. Zum Holding-Point fliegen
+            if dist_to_hold > 50 and not self.is_orbiting:
+                angle = math.atan2(hy - self.y, hx - self.x)
+                self.x += math.cos(angle) * self.speed
+                self.y += math.sin(angle) * self.speed
+            # 2. Am Point angekommen: Kreisen!
+            else:
+                if not self.is_orbiting:
+                    self.is_orbiting = True
+                    # Berechne den genauen Eintrittswinkel, damit es keinen Ruckler gibt
+                    self.orbit_angle = math.atan2(self.y - hy, self.x - hx)
+                
+                # Orbit-Geschwindigkeit basierend auf der eigenen Speed (Kreisumfang-Logik)
+                self.orbit_angle += self.speed / 50.0 
+                self.x = hx + math.cos(self.orbit_angle) * 50
+                self.y = hy + math.sin(self.orbit_angle) * 50
+            return # Blockiert die normale Navigation, bis Status geändert wird
 
         # Navigation
         target = self.get_target() # Nächster Waypoint auslesen
@@ -73,6 +103,43 @@ class Aircraft:
 
         tx, ty = target
         dist_to_target = math.hypot(tx - self.x, ty - self.y) # Distanz zum nächsten Waypoint berechnen
+
+        if self.target_wp_index == 0 and dist_to_target < 50:
+            clear_to_pass = True
+            
+            # Alle Flugzeuge scannen
+            for other in all_aircrafts:
+                if other != self and other.target_wp_index < len(WAYPOINT_ORDER):
+                    # Befindet sich das andere Flugzeug bereits auf dem Base-Leg?
+                    if WAYPOINT_ORDER[other.target_wp_index] == "Base":
+                        dist_to_other = math.hypot(self.x - other.x, self.y - other.y)
+                        
+                        # Ist der Vordermann noch zu nah (< 250px)? Dann warten!
+                        if dist_to_other < 250:
+                            clear_to_pass = False
+                            break # Ein zu nahes Flugzeug reicht, wir können aufhören zu scannen
+            
+            if not clear_to_pass:
+                # Wir kreisen direkt um den Downwind-Waypoint!
+                if not getattr(self, 'orbit_downwind', False):
+                    self.orbit_downwind = True
+                    self.orbit_downwind_angle = math.atan2(self.y - ty, self.x - tx)
+                
+                self.orbit_downwind_angle += self.speed / 50.0 
+                self.x = tx + math.cos(self.orbit_downwind_angle) * 50
+                self.y = ty + math.sin(self.orbit_downwind_angle) * 50
+                
+                # Auch beim Kreisen die Höhe anpassen
+                goal_altitude = 4500 - (self.target_wp_index * 1500)
+                if self.altitude > goal_altitude:
+                    self.altitude -= 20
+                elif self.altitude < goal_altitude:
+                    self.altitude += 20
+                    
+                return # Blockiert das Weiterfliegen zum Waypoint in diesem Frame
+            else:
+                # Erlaubnis erteilt! Falls wir gekreist sind, Status zurücksetzen
+                self.orbit_downwind = False
 
         # Ist Flugzeug im Radius von 5 Pixeln zum Wegpunkt?
         if dist_to_target < 5:
@@ -143,6 +210,27 @@ def main():
                 mx, my = pygame.mouse.get_pos()
                 aircrafts.append(Aircraft(mx, my))
 
+        # --- NEU: Der ATC-Controller (Tower Logik) ---
+        # 1. Zählen, wie viele Flugzeuge gerade auf der Route sind
+        active_planes = sum(1 for ac in aircrafts if ac.state in ["cruising", "approach"])
+        
+        # 2. Neue Flugzeuge zuweisen
+        for ac in aircrafts:
+            if ac.state == "new":
+                if active_planes >= MAX_CIRCUIT_PLANES:
+                    ac.state = "holding"
+                else:
+                    ac.state = "cruising"
+                    active_planes += 1 # Direkt hochzählen, damit das nächste Plane gecheckt wird
+                    
+        # 3. Flugzeuge aus der Warteschleife befreien, wenn Platz ist
+        if active_planes < MAX_CIRCUIT_PLANES:
+            for ac in aircrafts:
+                if ac.state == "holding":
+                    ac.state = "cruising"
+                    ac.is_orbiting = False # Verlässt die Kreisbahn, fliegt zum Downwind
+                    break # Immer nur ein Flugzeug auf einmal freigeben!
+
         # Update Logic
         to_remove = []
         for ac in aircrafts:
@@ -183,6 +271,12 @@ def main():
             pygame.draw.circle(screen, GREEN, pos, 5)
             wp_text = font_large.render(name, True, GREEN)
             screen.blit(wp_text, (pos[0] + 10, pos[1] + 10))
+
+         # NEU: Warteschleife visuell darstellen (Lila Kreis)
+        pygame.draw.circle(screen, PURPLE, HOLDING_WP, 5)
+        pygame.draw.circle(screen, PURPLE, HOLDING_WP, 50, 1) # Die Flugbahn
+        hold_text = font_large.render("Holding", True, PURPLE)
+        screen.blit(hold_text, (HOLDING_WP[0] + 10, HOLDING_WP[1] + 10))
 
         # Flugzeuge zeichnen
         for ac in aircrafts:
