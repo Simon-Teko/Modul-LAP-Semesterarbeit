@@ -26,7 +26,7 @@ WAYPOINTS = {
     "Downwind": (300, 400),
     "Base": (900, 400),
     "Final": (900, 700),
-    "Airport": (550, 700)
+    "Airport": (520, 700)
 }
 # Wegpunkte Reihenfolge
 WAYPOINT_ORDER = ["Downwind", "Base", "Final", "Airport"]
@@ -44,7 +44,7 @@ class Aircraft:
         self.x = x # Koordinate X
         self.y = y # Koordinate Y
         self.speed = random.uniform(1.5, 3.5) # Geschwindigkeit (Zufällig)
-        self.altitude = random.randrange(6000, 10001, 20) # Höhe in Fuss (Zufällig + durch 20 Teilbar)
+        self.altitude = random.randrange(6000, 20001, 20) # Höhe in Fuss (Zufällig + durch 20 Teilbar)
         self.target_wp_index = 0 # Kurs / Ziel --> Waypoint
         self.state = "new" # Status
         self.collision_avoidance = False # Kollisionserkennung
@@ -66,7 +66,7 @@ class Aircraft:
                 alt_diff = abs(self.altitude - other.altitude)
                 
                 # Check sight line < 250 pixels and altitude +- 100 feet
-                if dist < 250 and alt_diff <= 100:
+                if dist < 200 and alt_diff <= 100:
                     self.collision_avoidance = True
                     # Ausweichen durch Höhenänderung
                     if self.altitude >= other.altitude: # Wenn hörer als Gegner --> Steigen 
@@ -79,7 +79,7 @@ class Aircraft:
             dist_to_hold = math.hypot(hx - self.x, hy - self.y)
             
             # 1. Zum Holding-Point fliegen
-            if dist_to_hold > 50 and not self.is_orbiting:
+            if dist_to_hold > 130 and not self.is_orbiting:
                 angle = math.atan2(hy - self.y, hx - self.x)
                 self.x += math.cos(angle) * self.speed
                 self.y += math.sin(angle) * self.speed
@@ -91,9 +91,9 @@ class Aircraft:
                     self.orbit_angle = math.atan2(self.y - hy, self.x - hx)
                 
                 # Orbit-Geschwindigkeit basierend auf der eigenen Speed (Kreisumfang-Logik)
-                self.orbit_angle += self.speed / 50.0 
-                self.x = hx + math.cos(self.orbit_angle) * 50
-                self.y = hy + math.sin(self.orbit_angle) * 50
+                self.orbit_angle += self.speed / 130.0 
+                self.x = hx + math.cos(self.orbit_angle) * 130
+                self.y = hy + math.sin(self.orbit_angle) * 130
             return # Blockiert die normale Navigation, bis Status geändert wird
 
         # Navigation
@@ -106,6 +106,9 @@ class Aircraft:
 
         if self.target_wp_index == 0 and dist_to_target < 50:
             clear_to_pass = True
+
+            if self.altitude > 5000:
+                clear_to_pass = False
             
             # Alle Flugzeuge scannen
             for other in all_aircrafts:
@@ -130,7 +133,7 @@ class Aircraft:
                 self.y = ty + math.sin(self.orbit_downwind_angle) * 50
                 
                 # Auch beim Kreisen die Höhe anpassen
-                goal_altitude = 4500 - (self.target_wp_index * 1500)
+                goal_altitude = 4700 - (self.target_wp_index * 1500)
                 if self.altitude > goal_altitude:
                     self.altitude -= 20
                 elif self.altitude < goal_altitude:
@@ -152,16 +155,16 @@ class Aircraft:
         # Höhenanpassung zum Wegpunkt (Sinkflug simulieren)
         goal_altitude = 4500 - (self.target_wp_index * 1500) # Simulierter Glide Slope
         if self.altitude > goal_altitude:
-            self.altitude -= 20
+            self.altitude -= 10
         elif self.altitude < goal_altitude:
-            self.altitude += 20
+            self.altitude += 10
 
         # Kurs berechnen und bewegen
         angle = math.atan2(ty - self.y, tx - self.x)
         
         # In Approach State? (Wenn auf "Final")
         if WAYPOINT_ORDER[self.target_wp_index] == "Base"  or WAYPOINT_ORDER[self.target_wp_index] == "Final"  or WAYPOINT_ORDER[self.target_wp_index] == "Airport":
-            move_speed = 2 # Feste Approach Speed simulieren (8 Pixel entspräche hier einem sehr großen Sprung)
+            move_speed = 2 # Feste Approach Speed simulieren (8 Pixel entspräche hier einem sehr grossen Sprung)
         else:
             move_speed = self.speed
 
@@ -264,7 +267,7 @@ def main():
         screen.fill(WHITE)
 
         # Spielfeld und Flughafen zeichnen
-        pygame.draw.rect(screen, GRAY, (WAYPOINTS["Airport"][0]-20, WAYPOINTS["Airport"][1]-10, 120, 20))
+        pygame.draw.rect(screen, GRAY, (WAYPOINTS["Airport"][0]-50, WAYPOINTS["Airport"][1]-10, 150, 20))
         
         # Waypoints zeichnen (zur Visualisierung)
         for name, pos in WAYPOINTS.items():
@@ -274,7 +277,7 @@ def main():
 
          # NEU: Warteschleife visuell darstellen (Lila Kreis)
         pygame.draw.circle(screen, PURPLE, HOLDING_WP, 5)
-        pygame.draw.circle(screen, PURPLE, HOLDING_WP, 50, 1) # Die Flugbahn
+        pygame.draw.circle(screen, PURPLE, HOLDING_WP, 130, 1) # Die Flugbahn
         hold_text = font_large.render("Holding", True, PURPLE)
         screen.blit(hold_text, (HOLDING_WP[0] + 10, HOLDING_WP[1] + 10))
 
